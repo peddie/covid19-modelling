@@ -11,6 +11,18 @@ functions {
     real zeta = theta[3];
     int population = x_i[1];
 
+    // In this version of the SIRD model, we assume a constant country
+    // population and compute S (susceptible population) by subtracting all the
+    // rest of the populations from the total population.  The reason for doing
+    // this is that then we can avoid figuring out background birth and death
+    // rates.  I think this is justified because:
+    //
+    //    1) the number of cases is much smaller than the total population of the country
+    //
+    //    2) the timescale of the infection in the country is much faster than
+    //       the timescale of the country's background population dynamics
+    //
+    // We shall see.
     real denom = population - y[3];
     real s = population - y[1] - y[2] - y[3];
     // beta * S / (N0 - D) * I
@@ -28,10 +40,22 @@ functions {
   }
 }
 data {
+  // Number of days observed
   int<lower=1> T;
+  // Measurements of infected, recovered, dead
   real y[T,3];
+  // Time values (consecutive in practice)
   real ts[T];
+  // Total population of the country
   int<lower=1> population;
+
+  // Prior info
+  real sigma_infected_prior[2];
+  real sigma_dead_prior[2];
+  real beta_prior[2];
+  real gamma_prior[2];
+  real zeta_prior[2];
+  real noise_skew;
 }
 transformed data {
   real x_r[0];
@@ -41,20 +65,25 @@ parameters {
   real<lower=0> beta;
   real<lower=0> gamma;
   real<lower=0> zeta;
-  // real<lower=0, upper=1> theta[3];
-  real<lower=0> sigma;
+  real<lower=0> sigma_infected;
+  real<lower=0> sigma_dead;
 }
 model {
   real y_hat[T,3];
-  sigma ~ inv_gamma(1, 1);
-  beta ~ inv_gamma(2.2, 0.15);
-  gamma ~ inv_gamma(3, 0.12);
-  zeta ~ inv_gamma(3.5, 0.02);
+  sigma_infected ~ inv_gamma(sigma_infected_prior[1], sigma_infected_prior[2]);
+  sigma_dead ~ inv_gamma(sigma_dead_prior[1], sigma_dead_prior[2]);
+  beta ~ inv_gamma(beta_prior[1], beta_prior[2]);
+  gamma ~ normal(gamma_prior[1], gamma_prior[2]);
+  zeta ~ normal(zeta_prior[1], zeta_prior[2]);
   real theta[3] = {beta, gamma, zeta};
   y_hat[1] = y[1];
   y_hat[2:T] = integrate_ode_rk45(sird_dynamics, y[1], ts[1], ts[2:T], theta, x_r, x_i);
-  for (t in 1:T)
-    y[t] ~ normal(y_hat[t], sigma);
+  for (t in 1:T) {
+    // TODO(MP): y_hat should always be above y
+    y[t, 1] ~ skew_normal(y_hat[t, 1], y_hat[t, 1] * sigma_infected, noise_skew);
+    y[t, 2] ~ normal(y_hat[t, 2], (y_hat[t, 2] + 1) * sigma_dead);
+    y[t, 3] ~ normal(y_hat[t, 3], (y_hat[t, 3] + 1) * sigma_dead);
+  }
 }
 
 generated quantities {
@@ -63,7 +92,9 @@ generated quantities {
   real theta[3] = {beta, gamma, zeta};
   y_hat[1] = y[1];
   y_hat[2:T] = integrate_ode_rk45(sird_dynamics, y[1], ts[1], ts[2:T], theta, x_r, x_i);
-  for (t in 1:T)
-    for (i in 1:3)
-      log_likelihood[t, i] = normal_lpdf(y_hat[t, i] | y[t, i], sigma);
+  for (t in 1:T) {
+    log_likelihood[t, 1] = skew_normal_lpdf(y[t, 1] | y_hat[t, 1], y_hat[t, 1] * sigma_infected, noise_skew);
+    log_likelihood[t, 2] = normal_lpdf(y[t, 2] | y_hat[t, 2], (y_hat[t, 2] + 1) * sigma_dead);
+    log_likelihood[t, 3] = normal_lpdf(y[t, 3] | y_hat[t, 3], (y_hat[t, 3] + 1)* sigma_dead);
+  }
 }
