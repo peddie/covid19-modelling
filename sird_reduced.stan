@@ -55,6 +55,7 @@ data {
   real beta_prior[2];
   real gamma_prior[2];
   real zeta_prior[2];
+  real<lower=0> nu;
 }
 transformed data {
   real x_r[0];
@@ -82,7 +83,7 @@ model {
   y_hat[2:T] = integrate_ode_rk45(sird_dynamics, y_hat[1], ts[1], ts[2:T], theta, x_r, x_i);
   for (t in 1:T) {
     // TODO(MP): y_hat should always be above y
-    y[t, 1] ~ normal(y_hat[t, 1], sigma_infected);
+    y[t, 1] ~ student_t(nu, y_hat[t, 1], sigma_infected);
     y[t, 2] ~ normal(y_hat[t, 2], sigma_dead);
     y[t, 3] ~ normal(y_hat[t, 3], sigma_dead);
   }
@@ -95,7 +96,7 @@ generated quantities {
   y_hat[1] = y[1];
   y_hat[2:T] = integrate_ode_rk45(sird_dynamics, y_hat[1], ts[1], ts[2:T], theta, x_r, x_i);
   for (t in 1:T) {
-    log_likelihood[t, 1] = normal_lpdf(y[t, 1] | y_hat[t, 1], sigma_infected);
+    log_likelihood[t, 1] = student_t_lpdf(y[t, 1] | nu, y_hat[t, 1], sigma_infected);
     log_likelihood[t, 2] = normal_lpdf(y[t, 2] | y_hat[t, 2], sigma_dead);
     log_likelihood[t, 3] = normal_lpdf(y[t, 3] | y_hat[t, 3], sigma_dead);
   }
