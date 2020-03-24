@@ -2,6 +2,13 @@
 
 import pandas as pd
 
+def clamp_to_monotonic_increasing(table):
+    # I can't find an efficient pandas way to do an arbitrary fold-then-map or (shift; zip-then-map)
+    z = table.iloc[0, :]
+    for i in range(1, table.shape[0]):
+        table.iloc[i, :].clip(lower=z, inplace=True)
+        z = table.iloc[i, :]
+
 def extract_measurements(table, config):
     """Match out the row for the country, get rid of the initial metadata
     columns and drop any leading or trailing NaN values
@@ -40,7 +47,9 @@ def form_table(config, confirmed, recovered, dead):
     # Provide info about how the start of the data window was chosen.
     country = config['country']
     print(f'{country} reached {limit} "{reason}" on {data.index[newt0]}; dropping preceding data')
-    return data.iloc[newt0:, :]
+    ret = data.iloc[newt0:, :]
+    clamp_to_monotonic_increasing(ret)
+    return ret
 
 def display_measurements(measurements, populations, name):
     title=f'Coronavirus over time in {name} (total population {populations[name]})'

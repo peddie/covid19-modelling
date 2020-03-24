@@ -43,7 +43,7 @@ data {
   // Number of days observed
   int<lower=1> T;
   // Measurements of infected, recovered, dead
-  real y[T,3];
+  real y[T, 3];
   // Time values (consecutive in practice)
   real ts[T];
   // Total population of the country
@@ -74,18 +74,6 @@ model {
   beta ~ inv_gamma(beta_prior[1], beta_prior[2]);
   gamma ~ normal(gamma_prior[1], gamma_prior[2]);
   zeta ~ normal(zeta_prior[1], zeta_prior[2]);
-  // Package up rate coefficients for the ODE solver
-  real theta[3] = {beta, gamma, zeta};
-  // Set up the estimated time series for disease compartments
-  real y_hat[T,3];
-  y_hat[1] = y[1];
-  y_hat[2:T] = integrate_ode_rk45(sird_dynamics, y_hat[1], ts[1], ts[2:T], theta, x_r, x_i);
-  for (t in 1:T) {
-    // TODO(MP): y_hat should always be above y
-    y[t, 1] ~ normal(y_hat[t, 1], y_hat[t, 1] * sigma_infected);
-    y[t, 2] ~ normal(y_hat[t, 2], (y_hat[t, 2] + 1) * sigma_dead);
-    y[t, 3] ~ normal(y_hat[t, 3], (y_hat[t, 3] + 1) * sigma_dead);
-  }
 }
 
 generated quantities {
@@ -95,7 +83,7 @@ generated quantities {
   y_hat[1] = y[1];
   y_hat[2:T] = integrate_ode_rk45(sird_dynamics, y_hat[1], ts[1], ts[2:T], theta, x_r, x_i);
   for (t in 1:T) {
-    log_likelihood[t, 1] = normal_lpdf(y[t, 1] | y_hat[t, 1], y_hat[t, 1] * sigma_infected);
+    log_likelihood[t, 1] = normal_lpdf(y[t, 1] | y_hat[t, 1], fabs(y_hat[t, 1]) * sigma_infected);
     log_likelihood[t, 2] = normal_lpdf(y[t, 2] | y_hat[t, 2], (y_hat[t, 2] + 1) * sigma_dead);
     log_likelihood[t, 3] = normal_lpdf(y[t, 3] | y_hat[t, 3], (y_hat[t, 3] + 1)* sigma_dead);
   }
