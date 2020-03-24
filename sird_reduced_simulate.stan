@@ -71,9 +71,9 @@ generated quantities {
   real theta[3] = {beta, gamma, zeta};
   y_hat[1] = y0;
   y_hat[2:T] = integrate_ode_rk45(sird_dynamics, y_hat[1], ts[1], ts[2:T], theta, x_r, x_i);
-  for (t in 2:T) {
-    y_hat[t, 1] += normal_rng(y_hat[t, 1], y_hat[t, 1] * sigma_infected);
-    y_hat[t, 2] += normal_rng(y_hat[t, 2], (y_hat[t, 2] + 1) * sigma_dead);
-    y_hat[t, 3] += normal_rng(y_hat[t, 3], (y_hat[t, 3] + 1)* sigma_dead);
+  for (t in 1:T) {
+    y_hat[t, 1] += normal_rng(0, sigma_infected);
+    y_hat[t, 2] += normal_rng(0, sigma_dead);
+    y_hat[t, 3] += normal_rng(0, sigma_dead);
   }
 }
